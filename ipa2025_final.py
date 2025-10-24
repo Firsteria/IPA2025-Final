@@ -6,29 +6,36 @@
 
 import requests
 import json
-import restconf_final
-import netconf_final
+import time
+import os
+from dotenv import load_dotenv
+
 import ansible_final
 import netmiko_final
-from dotenv import load_dotenv
-import os
-import time
+import restconf_final
+import netconf_final
 
 load_dotenv()
-
 ACCESS_TOKEN = os.environ.get("accesstoken")
 roomIdToGetMessages = "Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vYmQwODczMTAtNmMyNi0xMWYwLWE1MWMtNzkzZDM2ZjZjM2Zm"
 
 selected_method = None  # เก็บ method ระหว่างคำสั่ง
 
+def send_webex_message(room_id, message):
+    postData = json.dumps({"roomId": room_id, "text": message})
+    HTTPHeaders = {"Authorization": ACCESS_TOKEN, "Content-Type": "application/json"}
+    r = requests.post("https://webexapis.com/v1/messages", data=postData, headers=HTTPHeaders)
+    if not r.status_code == 200:
+        raise Exception(f"Incorrect reply from Webex Teams API. Status code: {r.status_code}")
+
 while True:
     time.sleep(1)
+
+    # ดึงข้อความล่าสุดจาก Webex
     getParameters = {"roomId": roomIdToGetMessages, "max": 1}
     getHTTPHeader = {"Authorization": ACCESS_TOKEN}
-
-    # --- ดึงข้อความล่าสุดจาก Webex ---
     r = requests.get("https://webexapis.com/v1/messages", params=getParameters, headers=getHTTPHeader)
-    if not r.status_code == 200:
+    if r.status_code != 200:
         raise Exception(f"Incorrect reply from Webex Teams API. Status code: {r.status_code}")
 
     json_data = r.json()
@@ -41,22 +48,22 @@ while True:
     if message.startswith("/66070119"):
         parts = message.split(" ")
 
-        # --- ถ้าไม่มีอะไรมากกว่า /66070119 ---
+        # --- ไม่มีอะไรมากกว่า /66070119 ---
         if len(parts) == 1:
             responseMessage = "Error: No method specified"
 
-        # --- ถ้าใส่คำเดียวหลัง /66070119 ---
+        # --- มีคำเดียวหลัง /66070119 ---
         elif len(parts) == 2:
             second = parts[1].lower()
             if second in ["restconf", "netconf"]:
                 selected_method = second
                 responseMessage = f"Ok: {second.capitalize()}"
-            elif second.count(".") == 3:
+            elif second.count(".") == 3:  # เป็น IP แต่ยังไม่ได้เลือก method
                 if selected_method is None:
                     responseMessage = "Error: No method specified"
                 else:
                     responseMessage = "Error: No command found."
-            elif second in ["create", "delete", "enable", "disable", "status"]:
+            elif second in ["create", "delete", "enable", "disable", "status"]:  # action แต่ยังไม่ได้ IP
                 if selected_method is None:
                     responseMessage = "Error: No method specified"
                 else:
@@ -64,48 +71,49 @@ while True:
             else:
                 responseMessage = "Error: No method specified"
 
-        # --- ถ้าใส่ IP + action ---
+        # --- IP + action ---
         elif len(parts) >= 3:
             ip = parts[1]
             action = parts[2].lower()
 
+            # --- MOTD ---
             if action == "motd":
                 motd_message = " ".join(parts[3:]) if len(parts) > 3 else None
 
                 if motd_message:
-                    # ถ้ามีข้อความ ให้ใช้ Ansible config MOTD
+                    # ใช้ Ansible config MOTD
                     result = ansible_final.motd(ip, motd_message)
-                    responseMessage = f"{result}"
+                    responseMessage = result  # ไม่ append "using ..."
                 else:
-                    # ถ้าไม่มีข้อความ ให้ใช้ Netmiko อ่านค่า MOTD
+                    # ไม่มีข้อความ → ใช้ Netmiko อ่าน MOTD
                     result = netmiko_final.get_motd(ip)
-                    if "Error" in result:
-                        responseMessage = result
-                    else:
-                        responseMessage = f"{result}"
+                    responseMessage = result  # คืนค่าตามจริง
+
             else:
+                # action อื่น ๆ → ใช้ Restconf / Netconf
                 if selected_method is None:
                     responseMessage = "Error: No method specified"
                 else:
                     lib = restconf_final if selected_method == "restconf" else netconf_final
 
                     if action == "create":
-                        responseMessage = lib.create(ip) + f" using {selected_method.capitalize()}"
+                        result = lib.create(ip)
                     elif action == "delete":
-                        responseMessage = lib.delete(ip) + f" using {selected_method.capitalize()}"
+                        result = lib.delete(ip)
                     elif action == "enable":
-                        responseMessage = lib.enable(ip) + f" using {selected_method.capitalize()}"
+                        result = lib.enable(ip)
                     elif action == "disable":
-                        responseMessage = lib.disable(ip) + f" using {selected_method.capitalize()}"
+                        result = lib.disable(ip)
                     elif action == "status":
-                        responseMessage = lib.status(ip) + f" (checked by {selected_method.capitalize()})"
+                        result = lib.status(ip)
                     else:
-                        responseMessage = "Error: No command found."
+                        result = "Error: No command found"
+
+                    # append "using ..." เฉพาะเมื่อสำเร็จ
+                    if result.startswith("Error") or result.startswith("Cannot"):
+                        responseMessage = result
+                    else:
+                        responseMessage = f"{result} using {selected_method.capitalize()}"
 
         # --- ส่งข้อความกลับ Webex ---
-        postData = json.dumps({"roomId": roomIdToGetMessages, "text": responseMessage})
-        HTTPHeaders = {"Authorization": ACCESS_TOKEN, "Content-Type": "application/json"}
-
-        r = requests.post("https://webexapis.com/v1/messages", data=postData, headers=HTTPHeaders)
-        if not r.status_code == 200:
-            raise Exception(f"Incorrect reply from Webex Teams API. Status code: {r.status_code}")
+        send_webex_message(roomIdToGetMessages, responseMessage)
