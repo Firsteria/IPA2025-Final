@@ -1,32 +1,42 @@
 ---
-- name: Configure or read MOTD
+- name: Configure or Read MOTD on Cisco Routers
   hosts: routers
   gather_facts: no
   vars:
-    configure: false
+    # ตัวแปรที่จะถูกส่งจาก python ansible_final.py
     motd_message: ""
+    configure: false
   tasks:
+
     - name: Configure MOTD if requested
-      when: configure | bool
       cisco.ios.ios_config:
         lines:
-          - "banner motd #{{ motd_message }}#"
-      register: motd_out
-      ignore_errors: yes
+          - "banner motd {{ motd_message }}"
+      when: configure | bool
+      register: config_result
 
-    - name: Read MOTD if not configuring
-      when: not configure | bool
+    - name: Return success message after configuration
+      debug:
+        msg: "Ok: success"
+      when: configure | bool
+      changed_when: true
+      run_once: true
+
+    - name: Read MOTD if configure is false
       cisco.ios.ios_command:
         commands:
-          - show running-config | include banner motd
-      register: showmotd
-      ignore_errors: yes
+          - show run | include banner
+      register: motd_out
+      when: not configure | bool
 
-    - name: Print result_message to stdout
+    - name: Return current MOTD
       debug:
         msg: >-
-          {% if configure | bool %}
-            result_message: Ok: success
+          {% if motd_out.stdout[0] != "" %}
+            {{ motd_out.stdout[0] | regex_replace('^banner motd ', '') }}
           {% else %}
-            result_message: {{ showmotd.stdout[0].split('#')[1] if showmotd.stdout and showmotd.stdout[0] else 'Error: No MOTD Configured' }}
+            Error: No MOTD Configured
           {% endif %}
+      when: not configure | bool
+      changed_when: false
+      run_once: true
