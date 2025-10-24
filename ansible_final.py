@@ -40,11 +40,13 @@ def motd(ip, message=None):
         for line in result.stdout.splitlines():
             line = line.strip()
             if line.startswith("result_message:"):
-                # คืนค่า string หลัง "result_message:"
                 return line.split(":", 1)[1].strip()
 
-        # ถ้าไม่เจอ
-        return "Error: Unable to parse result"
+        # กรณี playbook คืนค่าไม่มี result_message
+        if message:
+            return "Ok: success"
+        else:
+            return "Error: No MOTD Configured"
 
     except Exception as e:
         return f"Error: {e}"

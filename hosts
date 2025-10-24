@@ -10,5 +10,9 @@ ansible_connection=ansible.netcommon.network_cli
 ansible_network_os=cisco.ios.ios
 ansible_user=admin
 ansible_password=cisco
+ansible_become=yes
+ansible_become_method=enable
+ansible_become_password=cisco
 ansible_port=22
+ansible_command_timeout=60
 ansible_ssh_common_args='-oKexAlgorithms=+diffie-hellman-group14-sha1 -oHostKeyAlgorithms=+ssh-rsa'
