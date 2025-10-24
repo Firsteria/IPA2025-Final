@@ -9,6 +9,7 @@ import json
 import restconf_final
 import netconf_final
 import ansible_final
+import netmiko_final
 from dotenv import load_dotenv
 import os
 import time
@@ -16,7 +17,7 @@ import time
 load_dotenv()
 
 ACCESS_TOKEN = os.environ.get("accesstoken")
-roomIdToGetMessages = "Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vNmZmMmNhMTAtYWI5My0xMWYwLTlhNzItZWZmOGEyMzcyMDc3"
+roomIdToGetMessages = "Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vYmQwODczMTAtNmMyNi0xMWYwLWE1MWMtNzkzZDM2ZjZjM2Zm"
 
 selected_method = None  # เก็บ method ระหว่างคำสั่ง
 
@@ -25,6 +26,7 @@ while True:
     getParameters = {"roomId": roomIdToGetMessages, "max": 1}
     getHTTPHeader = {"Authorization": ACCESS_TOKEN}
 
+    # --- ดึงข้อความล่าสุดจาก Webex ---
     r = requests.get("https://webexapis.com/v1/messages", params=getParameters, headers=getHTTPHeader)
     if not r.status_code == 200:
         raise Exception(f"Incorrect reply from Webex Teams API. Status code: {r.status_code}")
@@ -50,13 +52,11 @@ while True:
                 selected_method = second
                 responseMessage = f"Ok: {second.capitalize()}"
             elif second.count(".") == 3:
-                # ถ้าเป็น IP แต่ยังไม่ได้เลือก method
                 if selected_method is None:
                     responseMessage = "Error: No method specified"
                 else:
                     responseMessage = "Error: No command found."
             elif second in ["create", "delete", "enable", "disable", "status"]:
-                # ถ้าเป็น action แต่ยังไม่ได้เลือก method
                 if selected_method is None:
                     responseMessage = "Error: No method specified"
                 else:
@@ -69,16 +69,24 @@ while True:
             ip = parts[1]
             action = parts[2].lower()
 
-            # --- ถ้า action เป็น MOTD แยกตรวจสอบก่อน ---
             if action == "motd":
                 motd_message = " ".join(parts[3:]) if len(parts) > 3 else None
-                responseMessage = ansible_final.motd(ip, motd_message)
+
+                if motd_message:
+                    # ถ้ามีข้อความ ให้ใช้ Ansible config MOTD
+                    result = ansible_final.motd(ip, motd_message)
+                    responseMessage = f"{result}"
+                else:
+                    # ถ้าไม่มีข้อความ ให้ใช้ Netmiko อ่านค่า MOTD
+                    result = netmiko_final.get_motd(ip)
+                    if "Error" in result:
+                        responseMessage = result
+                    else:
+                        responseMessage = f"{result}"
             else:
-                # ถ้ายังไม่เลือก method
                 if selected_method is None:
                     responseMessage = "Error: No method specified"
                 else:
-                    # เลือก library ตาม method
                     lib = restconf_final if selected_method == "restconf" else netconf_final
 
                     if action == "create":

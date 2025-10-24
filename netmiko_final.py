@@ -1,43 +1,39 @@
 from netmiko import ConnectHandler
-from pprint import pprint
-import json
+import re
 
-device_ip = "10.0.15.61"
-username = "admin"
-password = "cisco"
+def get_motd(device_ip):
+    username = "admin"
+    password = "cisco"
 
-device_params = {
-    "device_type": "cisco_ios",
-    "ip": device_ip,
-    "username": username,
-    "password": password,
-}
+    device_params = {
+        "device_type": "cisco_ios",
+        "ip": device_ip,
+        "username": username,
+        "password": password,
+    }
 
+    try:
+        with ConnectHandler(**device_params) as ssh:
+            output = ssh.send_command("show running-config", delay_factor=2, max_loops=500)
 
-def gigabit_status():
-    ans = ""
-    with ConnectHandler(**device_params) as ssh:
-        up_count = 0
-        down_count = 0
-        admin_down_count = 0
-        gigabit_interfaces = []
-        result = ssh.send_command("show ip int br", use_textfsm=True)
-        print(json.dumps(result))
-        for interface in result:
-            if 'GigabitEthernet' in interface['interface']:
-                status = interface.get('status', '')
-                interface_name = interface['interface']
+            # หา banner motd และ delimiter
+            match = re.search(r'banner motd (\S+)\n(.*?)\n\1', output, re.DOTALL)
+            if match:
+                delimiter = match.group(1)
+                motd_text = match.group(2)
 
-                if status == "up":
-                    up_count += 1
-                    gigabit_interfaces.append(f"{interface_name} up")
-                elif status == "down":
-                    down_count += 1
-                    gigabit_interfaces.append(f"{interface_name} down")
-                elif status == "administratively down":
-                    admin_down_count += 1
-                    gigabit_interfaces.append(f"{interface_name} administratively down")
-        ans = ", ".join(gigabit_interfaces)
-        ans += f" -> {up_count} up, {down_count} down, {admin_down_count} administratively down"
-        return ans
+                # ลบบรรทัดว่างและบรรทัดที่มี delimiter เช่น ^C
+                motd_lines = [line for line in motd_text.splitlines() if line.strip() and line.strip() != delimiter]
 
+                # strip whitespace ของแต่ละบรรทัดแล้วรวมกัน
+                final_motd = "\n".join([line.strip() for line in motd_lines])
+
+                if final_motd == "":
+                    return "Error: No MOTD Configured"
+                else:
+                    return final_motd
+            else:
+                return "Error: No MOTD Configured"
+
+    except Exception as e:
+        return f"Error: {str(e)}"
