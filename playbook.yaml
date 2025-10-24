@@ -1,34 +1,16 @@
-- name: Configure or show MOTD
-  hosts: routers
+---
+- name: Configure MOTD on Cisco Router
+  hosts: "{{ target }}"
   gather_facts: no
-  vars:
-    motd_message: ""
-    configure: false
+  connection: network_cli
+
   tasks:
-
-    - name: Configure MOTD
-      when: configure | bool
-      cisco.ios.ios_config:
-        lines:
-          - "banner motd {{ motd_message }}"
-      register: motd_config
-      ignore_errors: yes
-
-    - name: Show MOTD
-      when: not configure | bool
-      cisco.ios.ios_command:
-        commands:
-          - "show running-config | include banner motd"
+    - name: Set MOTD Banner
+      cisco.ios.ios_banner:
+        banner: motd
+        text: "{{ motd_message }}"
       register: motd_result
-      ignore_errors: yes
 
-    - name: Set result message
-      set_fact:
-        result_message: >-
-          {% if configure | bool %}
-            Ok: success
-          {% elif motd_result.stdout is defined and motd_result.stdout and motd_result.stdout[0] != '' %}
-            {{ motd_result.stdout[0] | regex_replace('banner motd ', '') | trim }}
-          {% else %}
-            Error: No MOTD Configured
-          {% endif %}
+    - name: Show result
+      debug:
+        msg: "{{ motd_result }}"

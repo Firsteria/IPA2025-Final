@@ -1,52 +1,53 @@
-import subprocess
 
-# Mapping IP → hostname ตามไฟล์ hosts ของ Ansible
-ip_to_name = {
-    "10.0.15.61": "IPA-Router1",
-    "10.0.15.62": "IPA-Router2",
-    "10.0.15.63": "IPA-Router3",
-    "10.0.15.64": "IPA-Router4",
-    "10.0.15.65": "IPA-Router5"
-}
 
-def motd(ip, message=None):
-    """
-    ใช้ Ansible เพื่อ configure หรืออ่าน MOTD บน router
-    ip: ตัวอย่าง 10.0.15.61
-    message: ถ้าไม่ None → config MOTD, ถ้า None → อ่าน MOTD
-    """
-    host_name = ip_to_name.get(ip)
-    if not host_name:
-        return f"Error: Host {ip} not found in inventory"
+def motd(ip, message=None, retries=3, delay_seconds=5):
+    hosts_file = "hosts"
 
-    # extra-vars ให้ playbook รู้ว่า configure หรืออ่าน
-    extra_vars = f"motd_message='{message}' configure={'true' if message else 'false'}"
+    # ตรวจสอบ IP
+    if ip not in ["10.0.15.61","10.0.15.62","10.0.15.63","10.0.15.64","10.0.15.65"]:
+        return f"{ip} Error: Invalid Router IP"
 
-    command = [
-        "ansible-playbook",
-        "playbook.yaml",  # ใช้ playbook สำหรับ MOTD
-        "--limit", host_name,
-        "--extra-vars", extra_vars
-    ]
-
-    try:
+    if message:
+        # ตั้งค่า MOTD
+        command = [
+            "ansible-playbook",
+            "-i", hosts_file,
+            "playbook.yaml",
+            "--extra-vars",
+            f"target={ip} motd_message='{message}'"
+        ]
         result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode == 0 and "failed=0" in result.stdout:
+            return f"{message} Ok: success"
+        else:
+            return f"{message} Error: failed"
+    else:
+        # อ่าน MOTD
+        command = [
+            "ansible",
+            ip,
+            "-i", hosts_file,
+            "-m", "ios_command",
+            "-a",
+            "commands='show run | include banner motd'"
+        ]
+        result = subprocess.run(command, capture_output=True, text=True)
+        output = result.stdout
 
-        # ถ้า ansible มี error
-        if result.returncode != 0:
-            return f"Error: Ansible failed\n{result.stderr}"
-
-        # parse stdout หา result_message:
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if line.startswith("result_message:"):
-                return line.split(":", 1)[1].strip()
-
-        # กรณี playbook คืนค่าไม่มี result_message
-        if message:
-            return "Ok: success"
+        # ดึงข้อความ MOTD จริง
+        lines = output.splitlines()
+        motd_text = []
+        capture = False
+        for line in lines:
+            if "banner motd @" in line:
+                capture = True
+                continue
+            if capture and line.strip() == "@":
+                capture = False
+                break
+            if capture:
+                motd_text.append(line.strip())
+        if motd_text:
+            return " ".join(motd_text)
         else:
             return "Error: No MOTD Configured"
-
-    except Exception as e:
-        return f"Error: {e}"
