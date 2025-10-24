@@ -1,15 +1,32 @@
-- name: Collect running-config and save to local file
+---
+- name: Configure or read MOTD
   hosts: routers
   gather_facts: no
+  vars:
+    configure: false
+    motd_message: ""
   tasks:
-    - name: Get running-config
+    - name: Configure MOTD if requested
+      when: configure | bool
+      cisco.ios.ios_config:
+        lines:
+          - "banner motd #{{ motd_message }}#"
+      register: motd_out
+      ignore_errors: yes
+
+    - name: Read MOTD if not configuring
+      when: not configure | bool
       cisco.ios.ios_command:
         commands:
-          - show running-config
-      register: runout
+          - show running-config | include banner motd
+      register: showmotd
+      ignore_errors: yes
 
-    - name: Save running-config to local file
-      delegate_to: localhost
-      ansible.builtin.copy:
-        content: "{{ runout.stdout[0] }}"
-        dest: "./show_run_66070119_R1-Exam.txt"
+    - name: Print result_message to stdout
+      debug:
+        msg: >-
+          {% if configure | bool %}
+            result_message: Ok: success
+          {% else %}
+            result_message: {{ showmotd.stdout[0].split('#')[1] if showmotd.stdout and showmotd.stdout[0] else 'Error: No MOTD Configured' }}
+          {% endif %}

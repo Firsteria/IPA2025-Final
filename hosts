@@ -1,5 +1,9 @@
 [routers]
-R1-Exam ansible_host=10.0.15.61
+IPA-Router1 ansible_host=10.0.15.61
+IPA-Router2 ansible_host=10.0.15.62
+IPA-Router3 ansible_host=10.0.15.63
+IPA-Router4 ansible_host=10.0.15.64
+IPA-Router5 ansible_host=10.0.15.65
 
 [routers:vars]
 ansible_connection=ansible.netcommon.network_cli
