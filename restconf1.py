@@ -2,7 +2,7 @@ import json
 import requests
 requests.packages.urllib3.disable_warnings()
 
-api_url = "https://10.0.15.61/restconf/data/ietf-interfaces:interfaces/interface=Loopback66070119"
+api_url = "https://10.0.15.62/restconf/data/ietf-interfaces:interfaces/interface=Loopback66070119"
 
 headers = { "Accept": "application/yang-data+json", 
             "Content-type":"application/yang-data+json"
