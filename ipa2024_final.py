@@ -7,17 +7,19 @@
 import requests
 import json
 import restconf_final
+import netconf_final
+import ansible_final
 from dotenv import load_dotenv
 import os
 import time
-import netmiko_final
-import ansible_final
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
 load_dotenv()
 
 ACCESS_TOKEN = os.environ.get("accesstoken")
 roomIdToGetMessages = "Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vNmZmMmNhMTAtYWI5My0xMWYwLTlhNzItZWZmOGEyMzcyMDc3"
+
+selected_method = None  # เก็บ method ระหว่างคำสั่ง
 
 while True:
     time.sleep(1)
@@ -30,10 +32,7 @@ while True:
 
     json_data = r.json()
     if len(json_data["items"]) == 0:
-        raise Exception("There are no messages in the room.")
-
-    message = json_data["items"][0]["text"]
-    print("Received message:", message)
+        continue  # ไม่มีข้อความใหม่
 
     message = json_data["items"][0]["text"]
     print("Received message:", message)
@@ -41,62 +40,55 @@ while True:
     if message.startswith("/66070119"):
         parts = message.split(" ")
 
+        # --- ถ้าไม่มีอะไรมากกว่า /66070123 ---
         if len(parts) == 1:
             responseMessage = "Error: No method specified"
 
+        # --- ถ้าใส่ method อย่างเดียว ---
         elif len(parts) == 2:
-            second = parts[1]
-
-            if second in ["create", "delete", "enable", "disable", "status"]:
-                responseMessage = "Error: No IP specified"
+            second = parts[1].lower()
+            if second == "restconf":
+                selected_method = "restconf"
+                responseMessage = "Ok: Restconf"
+            elif second == "netconf":
+                selected_method = "netconf"
+                responseMessage = "Ok: Netconf"
             elif second.count(".") == 3:
                 responseMessage = "Error: No command found."
-            elif second == "restconf":
-                responseMessage = "Ok: Restconf"
+            elif second in ["create","delete","enable","disable","status"]:
+                responseMessage = "Error: No IP specified"
             else:
                 responseMessage = "Error: No method specified"
 
+        # --- ถ้าใส่ IP + action ---
         elif len(parts) >= 3:
             ip = parts[1]
-            action = parts[2]
+            action = parts[2].lower()
 
-            if action == "create":
-                responseMessage = restconf_final.create(ip)
-            elif action == "delete":
-                responseMessage = restconf_final.delete(ip)
-            elif action == "enable":
-                responseMessage = restconf_final.enable(ip)
-            elif action == "disable":
-                responseMessage = restconf_final.disable(ip)
-            elif action == "showrun":
-                filename = ansible_final.showrun()
-                if filename and filename.endswith(".txt"):
-                    responseMessage = "ok"
-                else:
-                    responseMessage = filename or "Error: No file created"
-            else:
+            # --- ถ้ายังไม่เลือก method ก่อนหน้า ---
+            if selected_method is None:
                 responseMessage = "Error: No method specified"
+            else:
+                # เลือก library ตาม method
+                lib = restconf_final if selected_method == "restconf" else netconf_final
 
-        # ✅ ส่งกลับ Webex
-        if 'action' in locals() and action == "showrun" and responseMessage == "ok":
-            with open(filename, "rb") as fileobject:
-                postData = MultipartEncoder(
-                    fields={
-                        "roomId": roomIdToGetMessages,
-                        "text": "show running config",
-                        "files": (os.path.basename(filename), fileobject, "text/plain"),
-                    }
-                )
-                HTTPHeaders = {
-                    "Authorization": ACCESS_TOKEN,
-                    "Content-Type": postData.content_type,
-                }
-        else:
-            postData = json.dumps({"roomId": roomIdToGetMessages, "text": responseMessage})
-            HTTPHeaders = {"Authorization": ACCESS_TOKEN, "Content-Type": "application/json"}
+                if action == "create":
+                    responseMessage = lib.create(ip) + f" using {selected_method.capitalize()}"
+                elif action == "delete":
+                    responseMessage = lib.delete(ip) + f" using {selected_method.capitalize()}"
+                elif action == "enable":
+                    responseMessage = lib.enable(ip) + f" using {selected_method.capitalize()}"
+                elif action == "disable":
+                    responseMessage = lib.disable(ip) + f" using {selected_method.capitalize()}"
+                elif action == "status":
+                    responseMessage = lib.status(ip) + f" (checked by {selected_method.capitalize()})"
+                else:
+                    responseMessage = "Error: No command found."
+
+        # --- ส่งข้อความกลับ Webex ---
+        postData = json.dumps({"roomId": roomIdToGetMessages, "text": responseMessage})
+        HTTPHeaders = {"Authorization": ACCESS_TOKEN, "Content-Type": "application/json"}
 
         r = requests.post("https://webexapis.com/v1/messages", data=postData, headers=HTTPHeaders)
         if not r.status_code == 200:
             raise Exception(f"Incorrect reply from Webex Teams API. Status code: {r.status_code}")
-
-    # ❌ ถ้า message ไม่ใช่ /66070119 → จะไม่ประกาศ responseMessage และไม่ส่งอะไรกลับ
