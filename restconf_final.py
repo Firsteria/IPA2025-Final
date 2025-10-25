@@ -4,7 +4,7 @@ import sys
 
 requests.packages.urllib3.disable_warnings()
 
-# Router IP ที่อนุญาต
+
 ROUTER_IPS = ["10.0.15.61", "10.0.15.62", "10.0.15.63", "10.0.15.64", "10.0.15.65"]
 
 headers = {

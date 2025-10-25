@@ -1,12 +1,12 @@
 from ncclient import manager
 import xmltodict
 
-# Router IP ที่อนุญาต
+
 ROUTER_IPS = ["10.0.15.61", "10.0.15.62", "10.0.15.63", "10.0.15.64", "10.0.15.65"]
 
 USERNAME = "admin"
 PASSWORD = "cisco"
-NETCONF_PORT = 830  # ปกติ NETCONF ใช้ port 830
+NETCONF_PORT = 830
 
 def get_manager(ip):
     """สร้าง session NETCONF"""
@@ -48,7 +48,7 @@ def create(ip):
     """
     try:
         m = get_manager(ip)
-        # ตรวจสอบว่ามี Loopback อยู่แล้ว
+        
         existing = m.get(filter=f"""
         <filter>
           <interfaces-state xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces">
@@ -84,7 +84,7 @@ def delete(ip):
     """
     try:
         m = get_manager(ip)
-        # ตรวจสอบว่ามี Loopback อยู่
+        
         existing = m.get(filter=f"""
         <filter>
           <interfaces-state xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces">

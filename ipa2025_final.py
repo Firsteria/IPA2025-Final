@@ -1,7 +1,7 @@
 #######################################################################################
 # Yourname: ปิยะภัทร ไชยวรรณะ
-# Your student ID: 660701119
-# Your GitHub Repo: https://github.com/Firsteria/IPA2024-Final.git
+# Your student ID: 66070119
+# Your GitHub Repo: https://github.com/Firsteria/IPA2025-Final.git
 #######################################################################################
 
 import requests
@@ -17,9 +17,9 @@ import netconf_final
 
 load_dotenv()
 ACCESS_TOKEN = os.environ.get("accesstoken")
-roomIdToGetMessages = "Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vNmZmMmNhMTAtYWI5My0xMWYwLTlhNzItZWZmOGEyMzcyMDc3"
+roomIdToGetMessages = "Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vYmQwODczMTAtNmMyNi0xMWYwLWE1MWMtNzkzZDM2ZjZjM2Zm"
 
-selected_method = None  # เก็บ method ระหว่างคำสั่ง
+selected_method = None
 
 def send_webex_message(room_id, message):
     postData = json.dumps({"roomId": room_id, "text": message})
@@ -31,7 +31,7 @@ def send_webex_message(room_id, message):
 while True:
     time.sleep(1)
 
-    # ดึงข้อความล่าสุดจาก Webex
+    
     getParameters = {"roomId": roomIdToGetMessages, "max": 1}
     getHTTPHeader = {"Authorization": ACCESS_TOKEN}
     r = requests.get("https://webexapis.com/v1/messages", params=getParameters, headers=getHTTPHeader)
@@ -40,7 +40,7 @@ while True:
 
     json_data = r.json()
     if len(json_data["items"]) == 0:
-        continue  # ไม่มีข้อความใหม่
+        continue  
 
     message = json_data["items"][0]["text"]
     print("Received message:", message)
@@ -48,17 +48,17 @@ while True:
     if message.startswith("/66070119"):
         parts = message.split(" ")
 
-        # --- ไม่มีอะไรมากกว่า /66070119 ---
+        
         if len(parts) == 1:
             responseMessage = "Error: No method specified"
 
-        # --- มีคำเดียวหลัง /66070119 ---
+        
         elif len(parts) == 2:
             second = parts[1].lower()
             if second in ["restconf", "netconf"]:
                 selected_method = second
                 responseMessage = f"Ok: {second.capitalize()}"
-            elif second.count(".") == 3:  # เป็น IP แต่ยังไม่ได้เลือก method
+            elif second.count(".") == 3:  
                 if selected_method is None:
                     responseMessage = "Error: No method specified"
                 else:
@@ -71,26 +71,26 @@ while True:
             else:
                 responseMessage = "Error: No method specified"
 
-        # --- IP + action ---
+        
         elif len(parts) >= 3:
             ip = parts[1]
             action = parts[2].lower()
 
-            # --- MOTD ---
+            
             if action == "motd":
                 motd_message = " ".join(parts[3:]) if len(parts) > 3 else None
 
                 if motd_message:
-                    # ใช้ Ansible config MOTD
+                    
                     result = ansible_final.motd(ip, motd_message)
-                    responseMessage = result  # ไม่ append "using ..."
+                    responseMessage = result  
                 else:
-                    # ไม่มีข้อความ → ใช้ Netmiko อ่าน MOTD
+                    
                     result = netmiko_final.get_motd(ip)
-                    responseMessage = result  # คืนค่าตามจริง
+                    responseMessage = result  
 
             else:
-                # action อื่น ๆ → ใช้ Restconf / Netconf
+                
                 if selected_method is None:
                     responseMessage = "Error: No method specified"
                 else:
@@ -109,11 +109,11 @@ while True:
                     else:
                         result = "Error: No command found"
 
-                    # append "using ..." เฉพาะเมื่อสำเร็จ
+                    
                     if result.startswith("Error") or result.startswith("Cannot"):
                         responseMessage = result
                     else:
                         responseMessage = f"{result} using {selected_method.capitalize()}"
 
-        # --- ส่งข้อความกลับ Webex ---
+       
         send_webex_message(roomIdToGetMessages, responseMessage)
