@@ -17,7 +17,7 @@ import netconf_final
 
 load_dotenv()
 ACCESS_TOKEN = os.environ.get("accesstoken")
-roomIdToGetMessages = "Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vYmQwODczMTAtNmMyNi0xMWYwLWE1MWMtNzkzZDM2ZjZjM2Zm"
+roomIdToGetMessages = "Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vNmZmMmNhMTAtYWI5My0xMWYwLTlhNzItZWZmOGEyMzcyMDc3"
 
 selected_method = None  # เก็บ method ระหว่างคำสั่ง
 
